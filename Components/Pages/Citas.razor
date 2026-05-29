@@ -1,0 +1,441 @@
+﻿@page "/citas"
+@using VetCare.Data
+@using VetCare.Models
+@using VetCare.Services
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext Db
+@inject ApiService Api
+
+<PageTitle>Citas — VetCare</PageTitle>
+
+<div class="page-header">
+    <h1>📅 Registro de Citas</h1>
+    <p>Combina datos de tu BD (mascotas) con la API del profesor (servicios)</p>
+</div>
+
+@if (!string.IsNullOrEmpty(mensaje))
+{
+    <div class="alert @(esError ? "alert-error" : "alert-success")">
+        @mensaje
+    </div>
+}
+
+<div class="card">
+
+    <div class="card-title">
+        ➕ Nueva Cita
+    </div>
+
+    @if (mascotas == null || serviciosApi == null)
+    {
+        <div class="loading">
+            <span>⟳</span> Cargando datos…
+        </div>
+    }
+    else
+    {
+        <div class="form-row">
+
+            <div class="form-group">
+
+                <label>Mascota (BD propia) *</label>
+
+                <select class="form-control"
+                        @bind="nuevaCitaMascotaId">
+
+                    <option value="0">
+                        — Selecciona una mascota —
+                    </option>
+
+                    @foreach (var m in mascotas)
+                    {
+                        <option value="@m.Id">
+                            @m.Nombre (@m.Especie — @m.NombreDueno)
+                        </option>
+                    }
+
+                </select>
+            </div>
+
+            <div class="form-group">
+
+                <label>Fecha y hora *</label>
+
+                <input type="datetime-local"
+                       class="form-control"
+                       @bind="nuevaCitaFecha"
+                       @bind:format="yyyy-MM-ddTHH:mm" />
+
+            </div>
+
+        </div>
+
+        <div class="form-group">
+
+            <label>
+                Filtrar servicios por especialidad (API del profesor)
+            </label>
+
+            <select class="form-control"
+                    style="width:auto; display:inline-block;"
+                    @onchange="FiltrarServicios">
+
+                <option value="0">
+                    — Todas las especialidades —
+                </option>
+
+                @foreach (var esp in especialidades ?? new List<EspecialidadApi>())
+                {
+                    <option value="@esp.Id">
+                        @esp.Nombre
+                    </option>
+                }
+
+            </select>
+
+        </div>
+
+        <div class="form-group">
+
+            <label>Servicio (API del profesor) *</label>
+
+            @if (serviciosFiltrados == null)
+            {
+                <p class="loading">
+                    <span>⟳</span> Cargando servicios…
+                </p>
+            }
+            else
+            {
+                <select class="form-control"
+                        @bind="servicioSeleccionadoId">
+
+                    <option value="0">
+                        — Selecciona un servicio —
+                    </option>
+
+                    @foreach (var s in serviciosFiltrados)
+                    {
+                        <option value="@s.Id">
+                            @s.Nombre —
+                            $@s.Precio.ToString("N2")
+                            (@s.Especialidad)
+                        </option>
+                    }
+
+                </select>
+            }
+
+        </div>
+
+        <div class="form-group">
+
+            <label>Notas</label>
+
+            <textarea class="form-control"
+                      rows="2"
+                      placeholder="Observaciones opcionales…"
+                          @bind="nuevaCitaNotas">
+            </textarea>
+
+            </div>
+
+            <button class="btn btn-primary"
+                    @onclick="RegistrarCita">
+
+                📅 Registrar cita
+            </button>
+        }
+
+    </div>
+
+    <div class="card">
+
+        <div class="card-title">
+            Historial de citas
+        </div>
+
+        <div class="alert alert-info"
+             style="margin-bottom:1rem;">
+
+            ℹ️ Los datos en <strong>azul</strong>
+            vienen de la BD propia;
+            los servicios.
+
+        </div>
+
+        @if (citas == null)
+        {
+            <div class="loading">
+                <span>⟳</span> Cargando historial…
+            </div>
+        }
+        else if (!citas.Any())
+        {
+            <p style="color:var(--text-muted)">
+                No hay citas registradas.
+            </p>
+        }
+        else
+        {
+            <div class="table-wrap">
+
+                <table>
+
+                    <thead>
+                        <tr>
+                            <th>Mascota (BD)</th>
+                            <th>Dueño (BD)</th>
+                            <th>Fecha (BD)</th>
+                            <th>Servicio (API)</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var c in citas)
+                        {
+                            <tr>
+
+                                <td>
+                                    <strong style="color:var(--primary)">
+                                        @c.Mascota?.Nombre
+                                    </strong>
+                                </td>
+
+                                <td style="color:var(--primary)">
+                                    @c.Mascota?.NombreDueno
+                                </td>
+
+                                <td style="color:var(--primary)">
+                                    @c.Fecha.ToString("dd/MM/yyyy HH:mm")
+                                </td>
+
+                                <td>
+
+                                    @if (c.Detalles != null && c.Detalles.Any())
+                                    {
+                                        @foreach (var d in c.Detalles)
+                                        {
+                                            <div>@d.NombreServicio</div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div>Sin servicios</div>
+                                    }
+
+                                </td>
+
+                                <td>
+                                    $@c.Total.ToString("N2")
+                                </td>
+
+                                <td>
+                                    <span class="badge @BadgeClass(c.Estado)">
+                                        @c.Estado
+                                    </span>
+                                </td>
+
+                                <td>
+
+                                    @if (c.Estado == "Programada")
+                                    {
+                                        <button class="btn btn-secondary btn-sm"
+                                                @onclick='() => CambiarEstado(c, "Atendida")'>
+
+                                            ✔ Atendida
+                                        </button>
+
+                                        <button class="btn btn-danger btn-sm"
+                                                @onclick='() => CambiarEstado(c, "Cancelada")'>
+
+                                            ✕ Cancelar
+                                        </button>
+                                    }
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+        }
+
+    </div>
+
+@code {
+
+    List<Mascota>? mascotas;
+
+    List<ServicioApi>? serviciosApi;
+
+    List<ServicioApi>? serviciosFiltrados;
+
+    List<EspecialidadApi>? especialidades;
+
+    List<Cita>? citas;
+
+    int nuevaCitaMascotaId = 0;
+
+    int servicioSeleccionadoId = 0;
+
+    DateTime nuevaCitaFecha = DateTime.Now.AddHours(1);
+
+    string nuevaCitaNotas = string.Empty;
+
+    string mensaje = string.Empty;
+
+    bool esError = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        mascotas = await Db.Mascotas
+            .OrderBy(m => m.Nombre)
+            .ToListAsync();
+
+        serviciosApi = await Api.GetServiciosAsync();
+
+        especialidades = await Api.GetEspecialidadesAsync();
+
+        serviciosFiltrados = serviciosApi;
+
+        await CargarCitas();
+    }
+
+    async Task CargarCitas()
+    {
+        citas = await Db.Citas
+            .Include(c => c.Mascota)
+            .Include(c => c.Detalles)
+            .OrderByDescending(c => c.Fecha)
+            .ToListAsync();
+    }
+
+    async Task FiltrarServicios(ChangeEventArgs e)
+    {
+        int id = int.TryParse(e.Value?.ToString(), out int v)
+            ? v
+            : 0;
+
+        if (id == 0)
+        {
+            serviciosFiltrados = serviciosApi;
+        }
+        else
+        {
+            serviciosFiltrados =
+                await Api.GetServiciosPorEspecialidadAsync(id);
+        }
+
+        servicioSeleccionadoId = 0;
+    }
+
+    async Task RegistrarCita()
+    {
+        mensaje = string.Empty;
+
+        if (nuevaCitaMascotaId == 0)
+        {
+            mensaje = "❌ Selecciona una mascota.";
+            esError = true;
+            return;
+        }
+
+        if (servicioSeleccionadoId == 0)
+        {
+            mensaje = "❌ Selecciona un servicio.";
+            esError = true;
+            return;
+        }
+
+        var servicio =
+            serviciosFiltrados?.FirstOrDefault(s =>
+                s.Id == servicioSeleccionadoId)
+
+            ?? serviciosApi?.FirstOrDefault(s =>
+                s.Id == servicioSeleccionadoId);
+
+        if (servicio == null)
+        {
+            mensaje = "❌ Servicio no encontrado.";
+            esError = true;
+            return;
+        }
+
+        try
+        {
+            var detalle = new DetalleServicio
+            {
+                ServicioApiId = servicio.Id,
+                NombreServicio = servicio.Nombre,
+                Cantidad = 1,
+                Precio = servicio.Precio
+            };
+
+            var cita = new Cita
+            {
+                MascotaId = nuevaCitaMascotaId,
+                Fecha = nuevaCitaFecha,
+                Estado = "Programada",
+                Notas = nuevaCitaNotas,
+                Total = servicio.Precio,
+                Detalles = new List<DetalleServicio>()
+            };
+
+            cita.Detalles.Add(detalle);
+
+            Db.Citas.Add(cita);
+
+            await Db.SaveChangesAsync();
+
+            await CargarCitas();
+
+            mensaje = "✅ Cita registrada correctamente.";
+
+            esError = false;
+
+            nuevaCitaMascotaId = 0;
+
+            servicioSeleccionadoId = 0;
+
+            nuevaCitaFecha = DateTime.Now.AddHours(1);
+
+            nuevaCitaNotas = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            mensaje = $"❌ Error al registrar: {ex.Message}";
+            esError = true;
+        }
+    }
+
+    async Task CambiarEstado(Cita cita, string nuevoEstado)
+    {
+        cita.Estado = nuevoEstado;
+
+        Db.Citas.Update(cita);
+
+        await Db.SaveChangesAsync();
+
+        mensaje = $"✅ Cita marcada como {nuevoEstado}.";
+
+        esError = false;
+
+        await CargarCitas();
+    }
+
+    string BadgeClass(string estado) => estado switch
+    {
+        "Atendida" => "badge-green",
+        "Cancelada" => "badge-red",
+        _ => "badge-yellow"
+    };
+}

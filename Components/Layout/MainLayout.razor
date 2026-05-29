@@ -1,0 +1,54 @@
+﻿@inherits LayoutComponentBase
+
+<div class="layout">
+    <nav class="sidebar">
+        <div class="brand">
+            <div class="brand-icon">🐾</div>
+            <div>
+                <span class="brand-name">VetCare</span>
+                <span class="brand-sub">Sistema Veterinario</span>
+            </div>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-label">Menú principal</div>
+            <ul class="nav-links">
+                <li>
+                    <a href="/" class="nav-item">
+                        <span class="nav-icon">🏠</span> Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="/catalogo" class="nav-item">
+                        <span class="nav-icon">📋</span> Catálogo de Servicios
+                    </a>
+                </li>
+                <li>
+                    <a href="/mascotas" class="nav-item">
+                        <span class="nav-icon">🐶</span> Mascotas
+                    </a>
+                </li>
+                <li>
+                    <a href="/citas" class="nav-item">
+                        <span class="nav-icon">📅</span> Citas
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="sidebar-avatar">👤</div>
+                <div class="sidebar-user-info">
+                    <strong>Christian García</strong>
+                    <small>No. Cuenta: 20212820</small>
+                    <small>Prog. para Web — Grupo E</small>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        @Body
+    </main>
+</div>

@@ -1,0 +1,237 @@
+﻿@page "/mascotas"
+@using VetCare.Data
+@using VetCare.Models
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext Db
+
+<PageTitle>Mascotas — VetCare</PageTitle>
+
+<div class="page-header">
+    <h1>🐶 Gestión de Mascotas</h1>
+    <p>Alta, consulta, edición y eliminación de mascotas</p>
+</div>
+
+@if (!string.IsNullOrEmpty(mensaje))
+{
+    <div class="alert @(esError ? "alert-error" : "alert-success")">@mensaje</div>
+}
+
+<div class="card">
+    <div class="card-title">@(editando ? "✏️ Editar mascota" : "➕ Registrar mascota")</div>
+    <EditForm Model="@form" OnValidSubmit="Guardar">
+        <DataAnnotationsValidator />
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Nombre de la mascota *</label>
+                <InputText class="form-control" @bind-Value="form.Nombre" placeholder="Ej. Max" />
+                <ValidationMessage For="@(() => form.Nombre)" class="validation-message" />
+            </div>
+            <div class="form-group">
+                <label>Especie *</label>
+                <InputSelect class="form-control" @bind-Value="form.Especie">
+                    <option value="">— Selecciona —</option>
+                    <option>Perro</option>
+                    <option>Gato</option>
+                    <option>Ave</option>
+                    <option>Conejo</option>
+                    <option>Reptil</option>
+                    <option>Otro</option>
+                </InputSelect>
+                <ValidationMessage For="@(() => form.Especie)" class="validation-message" />
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Raza</label>
+                <InputText class="form-control" @bind-Value="form.Raza" placeholder="Opcional" />
+            </div>
+            <div class="form-group">
+                <label>Nombre del dueño *</label>
+                <InputText class="form-control" @bind-Value="form.NombreDueno" placeholder="Nombre completo" />
+                <ValidationMessage For="@(() => form.NombreDueno)" class="validation-message" />
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Teléfono *</label>
+                <InputText class="form-control" @bind-Value="form.Telefono" placeholder="10 dígitos" />
+                <ValidationMessage For="@(() => form.Telefono)" class="validation-message" />
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <InputText class="form-control" @bind-Value="form.Email" placeholder="opcional@email.com" />
+                <ValidationMessage For="@(() => form.Email)" class="validation-message" />
+            </div>
+        </div>
+
+        <div style="display:flex; gap:.75rem;">
+            <button type="submit" class="btn btn-primary">
+                @(editando ? "💾 Guardar cambios" : "➕ Registrar")
+            </button>
+            @if (editando)
+            {
+                <button type="button" class="btn btn-secondary" @onclick="Cancelar">✕ Cancelar</button>
+            }
+        </div>
+    </EditForm>
+</div>
+
+<div class="card">
+    <div class="card-title">Mascotas registradas (@mascotas.Count)</div>
+    @if (!mascotas.Any())
+    {
+        <p style="color:var(--text-muted)">Aún no hay mascotas registradas.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Especie</th>
+                        <th>Raza</th>
+                        <th>Dueño</th>
+                        <th>Teléfono</th>
+                        <th>Registro</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in mascotas)
+                    {
+                        <tr>
+                            <td><strong>@m.Nombre</strong></td>
+                            <td>@m.Especie</td>
+                            <td>@(m.Raza ?? "—")</td>
+                            <td>@m.NombreDueno</td>
+                            <td>@m.Telefono</td>
+                            <td>@m.FechaRegistro.ToString("dd/MM/yyyy")</td>
+                            <td style="display:flex; gap:.4rem;">
+                                <button class="btn btn-secondary btn-sm" @onclick="() => Editar(m)">✏️</button>
+                                <button class="btn btn-danger btn-sm" @onclick="() => ConfirmarEliminar(m)">🗑️</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (mascotaAEliminar != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal">
+            <h3>⚠️ Confirmar eliminación</h3>
+            <p>¿Seguro que deseas eliminar a <strong>@mascotaAEliminar.Nombre</strong>? Esta acción no se puede deshacer.</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @onclick="CancelarEliminar">Cancelar</button>
+                <button class="btn btn-danger" @onclick="EliminarConfirmado">Sí, eliminar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    List<Mascota> mascotas = new();
+    Mascota form = new();
+    Mascota? mascotaAEliminar;
+    bool editando = false;
+    string mensaje = string.Empty;
+    bool esError = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarMascotas();
+    }
+
+    async Task CargarMascotas()
+    {
+        mascotas = await Db.Mascotas.OrderByDescending(m => m.FechaRegistro).ToListAsync();
+    }
+
+    async Task Guardar()
+    {
+        try
+        {
+            if (editando)
+                Db.Mascotas.Update(form);
+            else
+            {
+                form.FechaRegistro = DateTime.Now;
+                Db.Mascotas.Add(form);
+            }
+
+            await Db.SaveChangesAsync();
+            await CargarMascotas();
+            mensaje = editando ? "✅ Mascota actualizada." : "✅ Mascota registrada.";
+            esError = false;
+            editando = false;
+            form = new();
+        }
+        catch (Exception ex)
+        {
+            mensaje = $"❌ Error: {ex.Message}";
+            esError = true;
+        }
+    }
+
+    void Editar(Mascota m)
+    {
+        form = new Mascota
+        {
+            Id = m.Id,
+            Nombre = m.Nombre,
+            Especie = m.Especie,
+            Raza = m.Raza,
+            NombreDueno = m.NombreDueno,
+            Telefono = m.Telefono,
+            Email = m.Email,
+            FechaRegistro = m.FechaRegistro
+        };
+        editando = true;
+        mensaje = string.Empty;
+    }
+
+    void Cancelar()
+    {
+        form = new();
+        editando = false;
+        mensaje = string.Empty;
+    }
+
+    void ConfirmarEliminar(Mascota m) => mascotaAEliminar = m;
+    void CancelarEliminar() => mascotaAEliminar = null;
+
+    async Task EliminarConfirmado()
+    {
+        if (mascotaAEliminar == null) return;
+        try
+        {
+            bool tieneCitas = await Db.Citas.AnyAsync(c => c.MascotaId == mascotaAEliminar.Id);
+            if (tieneCitas)
+            {
+                mensaje = "❌ No se puede eliminar: esta mascota tiene citas registradas.";
+                esError = true;
+                mascotaAEliminar = null;
+                return;
+            }
+
+            Db.Mascotas.Remove(mascotaAEliminar);
+            await Db.SaveChangesAsync();
+            await CargarMascotas();
+            mensaje = "✅ Mascota eliminada.";
+            esError = false;
+        }
+        catch (Exception ex)
+        {
+            mensaje = $"❌ Error: {ex.Message}";
+            esError = true;
+        }
+        mascotaAEliminar = null;
+    }
+}
